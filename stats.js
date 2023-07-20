@@ -1,15 +1,12 @@
 import * as dotenv from "dotenv";
 dotenv.config();
-import fetch from "node-fetch";
-import { OpenAI } from "langchain/llms/openai";
-import { PromptTemplate } from "langchain/prompts";
-import { LLMChain } from "langchain/chains";
 import axios from "axios";
-import { match } from "assert";
+import * as fs from "fs";
 
 const map = new Map();
 const duplicateMatchup = new Map();
 
+//user info
 const getUsers = async () => {
   const response = await axios.get(
     "https://api.sleeper.app/v1/league/864448469199347712/users"
@@ -30,11 +27,11 @@ const getUsers = async () => {
   console.log("users completed");
 };
 
+//roster info
 const getRosters = async () => {
   const response = await axios.get(
     "https://api.sleeper.app/v1/league/864448469199347712/rosters"
   );
-  //roster info
   for (let i = 0; i < response.data.length; i++) {
     map.set(response.data[i].owner_id, {
       team_name: map.has(response.data[i].owner_id)
@@ -47,11 +44,13 @@ const getRosters = async () => {
       starters: "",
       team_points: "",
       matchup_id: "",
+      opponent: "",
     });
   }
   console.log("rosters completed");
 };
 
+//matchup info
 let week;
 const getMatchups = async () => {
   const response = await axios.get(
@@ -65,7 +64,7 @@ getUsers()
   .then(getMatchups)
   .then(async () => {
     console.log("All promises resolved");
-    //console.log(map);
+
     //when map is populated with name, avatar, and roster_id now we can access matchups like we are doing below
     [...map.values()].map((player) => {
       for (let playerInfo of week) {
@@ -85,47 +84,46 @@ getUsers()
           let team2 = [...map.values()].find(
             (team) => team.roster_id === matchup[1].roster_id
           );
-          //2) refrain from any duplicate matchups being logged.
-          // duplicateMatchup.set(matchup[0].matchup_id, team1);
 
           if (player.roster_id === matchup[0].roster_id) {
             player.matchup_id = matchup[0].matchup_id;
             player.team_points = matchup[0].points;
             player.starters = matchup[0].starters;
+            player.opponent = team2.team_name;
           } else if (player.roster_id === matchup[1].roster_id) {
             player.matchup_id = matchup[1].matchup_id;
             player.team_points = matchup[1].points;
             player.starters = matchup[1].starters;
+            player.opponent = team1.team_name;
           }
         }
       }
     });
     //langchain AI work
-    const model = new OpenAI({
-      temperature: 0,
+
+    let obj = Object.fromEntries(map);
+
+    //reading in data from leagueData
+    const data = fs.readFileSync("leagueData.json");
+    //parsing that league data into JSON
+    const jsonData = JSON.parse(data);
+
+    // UNCOMMENT THIS TO LOAD INFO INTO JSON, ONLY NEED TO RUN THIS ONCE
+    //jsonData.push(obj);
+
+    //Convert the JavaScript object back into a JSON string
+    const jsonString = JSON.stringify(jsonData);
+
+    //adding league info to the leagueData file
+    fs.writeFileSync("leagueData.json", jsonString, "utf-8", (err) => {
+      if (err) throw err;
+      console.log("Data added to file");
     });
 
-    const template =
-      "give me only 1 user that starts with the letter a {data} ";
-
-    const promptTemplate = new PromptTemplate({
-      template: template,
-      inputVariables: ["data"],
+    fs.writeFile("leagueDataPrompt.txt", jsonString, (err) => {
+      // In case of a error throw err.
+      if (err) throw err;
     });
-
-    const chain = new LLMChain({
-      llm: model,
-      prompt: promptTemplate,
-    });
-
-    const obj = Object.fromEntries(map);
-    const jsonString = JSON.stringify(obj);
-
-    const response = await chain.call({
-      data: map,
-    });
-
-    console.log(response);
   })
   .catch((error) => {
     console.error("At least one promise was rejected:", error);
