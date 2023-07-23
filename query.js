@@ -1,10 +1,11 @@
-import { OpenAI } from "langchain/llms/openai";
 import * as dotenv from "dotenv";
 import { TextLoader } from "langchain/document_loaders/fs/text";
 import { FaissStore } from "langchain/vectorstores/faiss";
 import { RetrievalQAChain } from "langchain/chains";
 import { OpenAIEmbeddings } from "langchain/embeddings/openai";
-
+import { ChatOpenAI } from "langchain/chat_models/openai";
+import { BufferMemory } from "langchain/memory";
+import { memoryUsage } from "process";
 dotenv.config();
 
 //loading league data so AI can read
@@ -22,12 +23,11 @@ const vectorStore = await FaissStore.fromDocuments(
 
 await vectorStore.save("leagueData");
 
-const model = new OpenAI({
+const model = new ChatOpenAI({
   temperature: 0.9,
 });
 
-const question =
-  "give me full details. what was the summary of Kaboweyne's matchup";
+const question = "give me a summary of kaboweyne and his opponent matchup ";
 
 //linking AI Model and league data
 const chain = RetrievalQAChain.fromLLM(model, vectorStore.asRetriever());
